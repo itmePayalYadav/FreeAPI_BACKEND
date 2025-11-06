@@ -10,9 +10,13 @@ import os
 env_file = os.environ.get("ENV_FILE")
 
 if env_file and Path(env_file).exists():
-    config = Config(RepositoryEnv(env_file))
+    config = Config(repository=RepositoryEnv(env_file))
+elif Path(".env.local").exists():
+    config = Config(repository=RepositoryEnv(".env.local"))
+elif Path(".env").exists():
+    config = Config(repository=RepositoryEnv(".env"))
 else:
-    config = Config()  
+    config = Config(repository=os.environ)
 
 ENV = config("ENV", default="local")
 
