@@ -7,8 +7,13 @@ import os
 # ----------------------------
 # ENV FILE CONFIG
 # ----------------------------
-env_file = os.environ.get("ENV_FILE", ".env.local")  
-config = Config(RepositoryEnv(env_file))
+env_file = os.environ.get("ENV_FILE")
+
+if env_file and Path(env_file).exists():
+    config = Config(RepositoryEnv(env_file))
+else:
+    config = Config()  
+
 ENV = config("ENV", default="local")
 
 # ----------------------------
