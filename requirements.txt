@@ -1,0 +1,100 @@
+# ----------------------
+# Core Django
+# ----------------------
+django
+djangorestframework
+djangorestframework-simplejwt
+
+# ----------------------
+# Database
+# ----------------------
+psycopg2-binary
+dj-database-url
+python-decouple
+
+# ----------------------
+# Authentication & Security
+# ----------------------
+pyotp
+
+# ----------------------
+# Utilities
+# ----------------------
+requests
+pytz
+qrcode
+Pillow
+
+# ----------------------
+# Email
+# ----------------------
+sendgrid
+
+# ----------------------
+# API Documentation
+# ----------------------
+drf-nested-routers
+drf-spectacular
+drf-spectacular-sidecar
+
+
+# ----------------------
+# Filtering
+# ----------------------
+django-filter
+
+# ----------------------
+# Cross-Origin Requests
+# ----------------------
+django-cors-headers
+
+# ----------------------
+# Image Uploader
+# ----------------------
+cloudinary
+
+# ----------------------
+# Testing & Coverage
+# ----------------------
+pytest
+pytest-django
+pytest-factoryboy
+model-bakery
+coverage
+
+# ----------------------
+# Markdown
+# ----------------------
+markdown
+
+# ----------------------
+# Payment
+# ----------------------
+stripe
+razorpay
+
+# ----------------------
+# Channel
+# ----------------------
+channels 
+channels_redis
+
+# ----------------------
+# Daphne
+# ----------------------
+daphne
+
+# ----------------------
+# Faker
+# ----------------------
+faker
+
+# ----------------------
+# Brotli
+# ----------------------
+brotli
+
+# ----------------------
+# Color Log
+# ----------------------
+colorlog
