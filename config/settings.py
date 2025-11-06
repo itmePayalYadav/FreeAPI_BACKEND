@@ -154,11 +154,12 @@ SIMPLE_JWT = {
 # SPECTACULAR / OPENAPI
 # ----------------------------
 SPECTACULAR_SETTINGS = {
-    "TITLE": "config",
+    "TITLE": "FREEAPI",
     "DESCRIPTION": "API documentation for your social media backend",
     "VERSION": "1.0.0",
-    "SERVE_INCLUDE_SCHEMA": False,
-    "SECURITY": [{"JWTAuth": []}],
+    "SERVE_INCLUDE_SCHEMA": True,  
+    "SECURITY": [{"BearerAuth": []}], 
+    "COMPONENT_SPLIT_REQUEST": True,  
 }
 
 # ----------------------------
