@@ -1,8 +1,15 @@
 from pathlib import Path
 from datetime import timedelta
-from decouple import config
+from decouple import Config, RepositoryEnv 
 import dj_database_url
 import os
+
+# ----------------------------
+# ENV FILE CONFIG
+# ----------------------------
+env_file = os.environ.get("ENV_FILE", ".env.local")  
+config = Config(RepositoryEnv(env_file))
+ENV = config("ENV", default="local")
 
 # ----------------------------
 # BASE DIRECTORY
@@ -12,13 +19,20 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ----------------------------
 # SECURITY & DEBUG
 # ----------------------------
-SECRET_KEY = config(
-    "SECRET_KEY",
-    default="%msg!8p+m5(%l$ljg6n7)b7opv&-1w%a@ao)_vb-s%tvcl6lu=",
-    cast=str
-)
-DEBUG = config("DEBUG", default=False, cast=bool)
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1,freeapi-hub.up.railway.app").split(",")
+if ENV == "local":
+    SECRET_KEY = config("SECRET_KEY", default="%msg!8p+m5(%l$ljg6n7)b7opv&-1w%a@ao)_vb-s%tvcl6lu=",cast=str)
+else:
+    SECRET_KEY = config("SECRET_KEY")
+
+if ENV == "local":
+    DEBUG = True
+else:
+    DEBUG = False 
+
+if ENV == "local":
+    ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1").split(",")
+else:
+    ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="freeapi-hub.up.railway.app").split(",")
 
 # ----------------------------
 # INSTALLED APPS
@@ -181,7 +195,10 @@ FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:5173")
 # -----------------------------------
 # Backend URL (for absolute media URLs)
 # -----------------------------------
-BACKEND_URL = "http://127.0.0.1:8000"
+if ENV == "local":
+    BACKEND_URL = config("BACKEND_URL")
+else:
+    BACKEND_URL = config("BACKEND_URL")
 
 # ----------------------------
 # GOOGLE AUTH
