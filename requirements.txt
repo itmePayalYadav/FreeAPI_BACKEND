@@ -1,100 +1,56 @@
-# ----------------------
-# Core Django
-# ----------------------
-django
-djangorestframework
-djangorestframework-simplejwt
+# ----------------------------
+# Core Django & ASGI/WSGI packages
+# ----------------------------
+Django==5.2.7                
+daphne==4.2.1               
+channels==4.3.1             
+channels_redis==4.3.0        
 
-# ----------------------
-# Database
-# ----------------------
-psycopg2-binary
-dj-database-url
-python-decouple
-
-# ----------------------
+# ----------------------------
 # Authentication & Security
-# ----------------------
-pyotp
+# ----------------------------
+djangorestframework==3.16.1           
+djangorestframework_simplejwt==5.5.1 
+pyjwt==2.10.1                         
+pyotp==2.9.0                          
+cryptography==46.0.2                   
+cffi==2.0.0                      
 
-# ----------------------
-# Utilities
-# ----------------------
-requests
-pytz
-qrcode
-Pillow
+# ----------------------------
+# Static Files & Media
+# ----------------------------
+whitenoise==6.11.0                     
+pillow==11.3.0                
+cloudinary==1.44.1                
 
-# ----------------------
-# Email
-# ----------------------
-sendgrid
+# ----------------------------
+# Databases
+# ----------------------------
+psycopg2-binary==2.9.10                   
+dj-database-url==3.0.1           
 
-# ----------------------
-# API Documentation
-# ----------------------
-drf-nested-routers
-drf-spectacular
-drf-spectacular-sidecar
+# ----------------------------
+# HTTP / Requests / External APIs
+# ----------------------------
+requests==2.32.5                          
+httpx==0.28.1                      
+python-http-client==3.3.7            
+sendgrid==6.12.5                
+stripe==13.0.1                     
+razorpay==2.0.0                     
+paypalrestsdk==1.13.3               
 
+# ----------------------------
+# Development / Testing
+# ----------------------------
+pytest==8.4.2                              
+pytest-django==4.11.1                    
+factory_boy==3.3.3                       
+pytest-factoryboy==2.8.1                   
 
-# ----------------------
-# Filtering
-# ----------------------
-django-filter
-
-# ----------------------
-# Cross-Origin Requests
-# ----------------------
-django-cors-headers
-
-# ----------------------
-# Image Uploader
-# ----------------------
-cloudinary
-
-# ----------------------
-# Testing & Coverage
-# ----------------------
-pytest
-pytest-django
-pytest-factoryboy
-model-bakery
-coverage
-
-# ----------------------
-# Markdown
-# ----------------------
-markdown
-
-# ----------------------
-# Payment
-# ----------------------
-stripe
-razorpay
-
-# ----------------------
-# Channel
-# ----------------------
-channels 
-channels_redis
-
-# ----------------------
-# Daphne
-# ----------------------
-daphne
-
-# ----------------------
-# Faker
-# ----------------------
-faker
-
-# ----------------------
-# Brotli
-# ----------------------
-brotli
-
-# ----------------------
-# Color Log
-# ----------------------
-colorlog
+# ----------------------------
+# Utilities / Misc
+# ----------------------------
+python-decouple==3.8                      
+tqdm==4.67.1                              
+inflection==0.5.1                         
