@@ -16,6 +16,9 @@ urlpatterns = [
     path("api/v1/docs/swagger/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
     path("api/v1/docs/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
 
+    # Health Check
+    path("api/v1/health/", include(("health.urls", "health"), namespace="health")),
+    
     # Apps
     path("api/v1/accounts/", include(("accounts.urls", "accounts"), namespace="accounts")),
     path("api/v1/todo/", include(("todo.urls", "todo"), namespace="todo")),
