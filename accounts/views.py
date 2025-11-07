@@ -12,6 +12,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework.parsers import MultiPartParser, FormParser
 from accounts.models import User
 from accounts.serializers import (
     RegisterSerializer, 
@@ -46,7 +47,6 @@ def generate_jwt_tokens(user):
     """
     refresh = RefreshToken.for_user(user)
     return str(refresh.access_token), str(refresh)
-
 
 # ----------------------
 # Register with Email Verification
@@ -87,7 +87,6 @@ class RegisterView(generics.CreateAPIView):
             status_code=status.HTTP_201_CREATED
         )
 
-
 # ----------------------
 # Verify Email
 # ----------------------
@@ -121,7 +120,6 @@ class VerifyEmailView(generics.GenericAPIView):
         user.save(update_fields=["is_verified", "email_verification_token", "email_verification_expiry"])
 
         return api_response(True, "Email verified successfully")
-
 
 # ----------------------
 # Login
@@ -178,7 +176,6 @@ class LoginView(generics.GenericAPIView):
             status_code=status.HTTP_200_OK
         )
 
-
 # ----------------------
 # Logout
 # ----------------------
@@ -196,7 +193,6 @@ class LogoutView(generics.GenericAPIView):
         request.session.flush()
         return api_response(True, "Logged out successfully")
 
-
 # ----------------------
 # Refresh Token
 # ----------------------
@@ -211,6 +207,10 @@ class RefreshTokenView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         refresh_token = serializer.validated_data.get("refresh")
+
+        user = User.objects.filter(refresh_token=refresh_token, is_active=True).first()
+        if not user:
+            return api_response(False, "Invalid or expired refresh token", status_code=status.HTTP_401_UNAUTHORIZED)
 
         try:
             token = RefreshToken(refresh_token)
@@ -254,7 +254,6 @@ class ForgotPasswordView(generics.GenericAPIView):
 
         return api_response(True, "Reset link sent successfully.")
 
-
 # ----------------------
 # Reset Password
 # ----------------------
@@ -285,7 +284,6 @@ class ResetPasswordView(generics.GenericAPIView):
 
         return api_response(True, "Password reset successful")
 
-
 # ----------------------
 # Change Password
 # ----------------------
@@ -308,7 +306,6 @@ class ChangePasswordView(generics.GenericAPIView):
         request.user.set_password(serializer.validated_data["new_password"])
         request.user.save(update_fields=["password"])
         return api_response(True, "Password changed successfully")
-
 
 # ----------------------
 # Resend Email Verification
@@ -343,7 +340,6 @@ class ResendEmailView(generics.GenericAPIView):
 
         return api_response(True, "Verification email resent successfully.")
 
-
 # ----------------------
 # Current User
 # ----------------------
@@ -361,7 +357,6 @@ class CurrentUserView(generics.RetrieveAPIView):
         serializer = self.get_serializer(self.get_object())
         return api_response(True, "Current user retrieved successfully", data=serializer.data)
 
-
 # ----------------------
 # Update Avatar
 # ----------------------
@@ -372,6 +367,8 @@ class UpdateAvatarView(generics.UpdateAPIView):
     """
     serializer_class = UpdateAvatarSerializer
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser] 
+    http_method_names = ['patch']
 
     def get_object(self):
         return self.request.user
@@ -392,9 +389,8 @@ class UpdateAvatarView(generics.UpdateAPIView):
 
         return api_response(True, "Avatar updated successfully", data={"avatar": avatar_url})
 
-
 # ----------------------
-# OAuth Callbacks (Google & GitHub)
+# OAuth Callbacks (Google)
 # ----------------------
 class GoogleLoginView(generics.GenericAPIView):
     """
@@ -411,7 +407,6 @@ class GoogleLoginView(generics.GenericAPIView):
             f"&scope=openid%20email%20profile&access_type=offline&prompt=consent"
         )
         return api_response(True, "Google login URL generated successfully", data={"auth_url": auth_url})
-
 
 class GoogleLoginCallbackView(generics.GenericAPIView):
     """
@@ -470,9 +465,11 @@ class GoogleLoginCallbackView(generics.GenericAPIView):
 
         # Redirect to frontend with tokens
         params = urlencode({"access": access_token, "refresh": refresh_token})
-        return redirect(f"{settings.FRONTEND_URL}/google/callback?{params}")
+        return redirect(f"{settings.FRONTEND_URL}/api/v1/accounts/google/callback?{params}")
 
-
+# ----------------------
+# OAuth Callbacks (GitHub)
+# ----------------------
 class GitHubLoginView(APIView):
     """
     Generates GitHub OAuth login URL for client.
@@ -483,7 +480,6 @@ class GitHubLoginView(APIView):
     def get(self, request):
         auth_url = f"https://github.com/login/oauth/authorize?client_id={settings.GITHUB_CLIENT_ID}&redirect_uri={settings.GITHUB_REDIRECT_URI}&scope=user:email"
         return api_response(True, "GitHub login URL generated successfully", data={"auth_url": auth_url})
-
 
 class GitHubLoginCallbackView(generics.GenericAPIView):
     """
@@ -541,7 +537,6 @@ class GitHubLoginCallbackView(generics.GenericAPIView):
         params = urlencode({"access": access_token, "refresh": refresh_token, "username": username})
         return redirect(f"{settings.FRONTEND_URL}/github/callback?{params}")
 
-
 # ----------------------
 # Role Management
 # ----------------------
@@ -584,7 +579,6 @@ class ChangeRoleView(generics.GenericAPIView):
 
         return api_response(True, f"Role updated successfully to {role}", data={"user_id": user.id, "role": user.role})
 
-
 # ----------------------
 # 2FA Management
 # ----------------------
@@ -613,7 +607,6 @@ class Setup2FAView(APIView):
             data={"totp_uri": totp_uri, "qr_code": qr_code_base64}
         )
 
-
 class Enable2FAView(generics.GenericAPIView):
     """
     Enables 2FA for the user after validating the TOTP token.
@@ -637,7 +630,6 @@ class Enable2FAView(generics.GenericAPIView):
             return api_response(True, "2FA enabled successfully.")
         
         return api_response(False, "Invalid TOTP token.", status_code=status.HTTP_400_BAD_REQUEST)
-    
 
 class Disable2FAView(generics.GenericAPIView):
     """

@@ -54,7 +54,7 @@ class User(BaseModel, AbstractBaseUser, PermissionsMixin):
     # Two-Factor Authentication (TOTP)
     # ----------------------
     is_2fa_enabled = models.BooleanField(default=False)
-    totp_secret = models.CharField(max_length=16, blank=True, null=True)
+    totp_secret = models.CharField(max_length=32, blank=True, null=True)
     
     # ----------------------
     # Realtime Presence 
@@ -79,7 +79,7 @@ class User(BaseModel, AbstractBaseUser, PermissionsMixin):
     def avatar_url(self):
         if self.avatar:
             try:
-                return self.avatar.url
+                return self.avatar
             except ValueError:
                 return None
         name = self.username.replace(" ", "+")

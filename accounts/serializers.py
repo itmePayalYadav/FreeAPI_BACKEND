@@ -114,6 +114,8 @@ class ResendEmailVerificationSerializer(serializers.Serializer):
 # Update Avatar Serializer
 # ----------------------------
 class UpdateAvatarSerializer(serializers.ModelSerializer):
+    avatar = serializers.ImageField(required=True, allow_null=False)
+    
     class Meta:
         model = User
         fields = ["avatar"]
