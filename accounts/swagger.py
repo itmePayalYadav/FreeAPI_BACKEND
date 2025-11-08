@@ -6,6 +6,7 @@ from .serializers import (
     ResetPasswordSerializer,
     ChangePasswordSerializer,
     ChangeRoleSerializer,
+    UpdateAvatarSerializer,
     RefreshTokenInputSerializer,
     Setup2FASerializer,
     Enable2FASerializer,
@@ -759,7 +760,7 @@ update_avatar_success_example = OpenApiExample(
 # Extend Schema for Update Avatar View
 # ----------------------------
 update_avatar_schema = extend_schema(
-    request=None,
+    request=UpdateAvatarSerializer,
     examples=[update_avatar_request_example],
     responses={
         200: OpenApiResponse(
