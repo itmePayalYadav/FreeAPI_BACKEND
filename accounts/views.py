@@ -548,7 +548,7 @@ class GoogleLoginCallbackView(generics.GenericAPIView):
             logger.info(f"JWT tokens generated for Google user: {email}")
 
             params = urlencode({"access": access_token, "refresh": refresh_token})
-            redirect_url = f"{settings.FRONTEND_URL}/api/v1/accounts/google/callback?{params}"
+            redirect_url = f"{settings.FRONTEND_URL}/google/callback?{params}"
             logger.info(f"Redirecting Google user {email} to {redirect_url}")
 
             return redirect(redirect_url)
