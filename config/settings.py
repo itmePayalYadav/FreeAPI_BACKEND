@@ -154,7 +154,7 @@ SIMPLE_JWT = {
 # SPECTACULAR / OPENAPI
 # ----------------------------
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'FreeAPI Hub',
+    'TITLE': 'FreeAPI docs',
     'DESCRIPTION': 'Professional API documentation for FreeAPI Hub',
     'VERSION': 'v1',
     'SERVE_INCLUDE_SCHEMA': False,
