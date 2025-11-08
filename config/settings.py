@@ -154,12 +154,12 @@ SIMPLE_JWT = {
 # SPECTACULAR / OPENAPI
 # ----------------------------
 SPECTACULAR_SETTINGS = {
-    "TITLE": "FREEAPI",
-    "DESCRIPTION": "API documentation for your social media backend",
-    "VERSION": "1.0.0",
-    "SERVE_INCLUDE_SCHEMA": True,  
-    "SECURITY": [{"BearerAuth": []}], 
-    "COMPONENT_SPLIT_REQUEST": True,  
+    'TITLE': 'FreeAPI Hub',
+    'DESCRIPTION': 'Professional API documentation for FreeAPI Hub',
+    'VERSION': 'v1',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SCHEMA_PATH_PREFIX': r'/api/v1/',
+    'COMPONENT_SPLIT_REQUEST': True,
 }
 
 # ----------------------------

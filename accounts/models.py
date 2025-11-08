@@ -78,12 +78,11 @@ class User(BaseModel, AbstractBaseUser, PermissionsMixin):
     @property
     def avatar_url(self):
         if self.avatar:
-            try:
+            if hasattr(self.avatar, "url"):
+                return self.avatar.url
+            elif isinstance(self.avatar, str) and self.avatar.startswith("http"):
                 return self.avatar
-            except ValueError:
-                return None
-        name = self.username.replace(" ", "+")
-        return f"https://ui-avatars.com/api/?name={name}&size=200"
+        return f"https://ui-avatars.com/api/?name={self.username}&size=200"
     
     # ----------------------
     # Online Presence Helpers

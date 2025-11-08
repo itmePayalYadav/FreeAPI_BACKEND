@@ -43,6 +43,7 @@ class TestUserModel:
         """Should return custom avatar URL if set"""
         user.avatar = "https://example.com/avatar.jpg"
         user.save()
+        print(user)
         assert user.avatar_url == "https://example.com/avatar.jpg"
 
     def test_avatar_url_without_avatar(self, user):

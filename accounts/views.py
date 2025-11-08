@@ -31,11 +31,38 @@ from accounts.serializers import (
     Enable2FASerializer,
     Disable2FASerializer
 )
+from accounts.swagger import (
+    register_schema,
+    login_schema,
+    logout_schema,
+    setup_2fa_schema,
+    enable_2fa_schema,
+    disable_2fa_schema,
+    verify_email_schema,
+    reset_password_schema,
+    forgot_password_schema,
+    refresh_token_schema,
+    change_role_schema,
+    google_login_schema,
+    google_callback_schema,
+    github_login_schema,
+    github_callback_schema,
+    update_avatar_schema,
+    change_password_schema,
+    get_current_user_schema,
+    resend_verification_email_schema
+)
 from accounts.utils import get_client_ip, generate_totp_qr_code
 from core.utils import send_email, api_response
 from core.constants import LOGIN_GOOGLE, LOGIN_GITHUB
+from core.logger import get_logger
 from core.cloudinary import upload_to_cloudinary
 from core.permissions import IsSuperAdmin
+
+# =============================================================
+# Logger
+# =============================================================
+logger = get_logger(__name__)
 
 # ----------------------
 # Helper function for generating JWT tokens
@@ -51,6 +78,7 @@ def generate_jwt_tokens(user):
 # ----------------------
 # Register with Email Verification
 # ----------------------
+@register_schema
 class RegisterView(generics.CreateAPIView):
     """
     Registers a new user and sends an email verification link.
@@ -62,7 +90,8 @@ class RegisterView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-
+        logger.info(f"New user registered: {user.email} (ID: {user.id}) from IP: {get_client_ip(request)}")
+        
         # Generate unique email verification token
         un_hashed = secrets.token_hex(20)
         hashed = hashlib.sha256(un_hashed.encode()).hexdigest()
@@ -79,6 +108,8 @@ class RegisterView(generics.CreateAPIView):
             template_name="email_verification",
             context={"username": user.username, "verification_code": un_hashed, "verify_link": verify_link}
         )
+        
+        logger.info(f"Verification email sent to {user.email}")
 
         return api_response(
             success=True,
@@ -90,6 +121,7 @@ class RegisterView(generics.CreateAPIView):
 # ----------------------
 # Verify Email
 # ----------------------
+@verify_email_schema
 class VerifyEmailView(generics.GenericAPIView):
     """
     Verify a user's email using a token sent via email.
@@ -111,6 +143,7 @@ class VerifyEmailView(generics.GenericAPIView):
         ).first()
 
         if not user:
+            logger.warning("Invalid or expired email verification token used.")
             return api_response(False, "Invalid or expired token", status_code=status.HTTP_400_BAD_REQUEST)
 
         # Mark user as verified
@@ -119,11 +152,13 @@ class VerifyEmailView(generics.GenericAPIView):
         user.email_verification_expiry = None
         user.save(update_fields=["is_verified", "email_verification_token", "email_verification_expiry"])
 
+        logger.info(f"User {user.email} (ID: {user.id}) verified successfully.")
         return api_response(True, "Email verified successfully")
 
 # ----------------------
 # Login
 # ----------------------
+@login_schema
 class LoginView(generics.GenericAPIView):
     """
     Authenticates a user with email and password.
@@ -144,15 +179,18 @@ class LoginView(generics.GenericAPIView):
         # Authenticate user
         user = authenticate(email=email, password=password)
         if not user:
+            logger.warning(f"Failed login attempt for email: {email}")
             return api_response(False, "Invalid credentials", status_code=status.HTTP_401_UNAUTHORIZED)
 
         # Check if email is verified
         if not user.is_verified:
+            logger.warning(f"Unverified user {email} attempted login.")
             return api_response(False, "Email not verified", status_code=status.HTTP_403_FORBIDDEN)
 
         # 2FA verification if enabled
         if user.is_2fa_enabled:
             if not token or not user.verify_totp(token):
+                logger.warning(f"2FA failed for user {email}")
                 return api_response(False, "Invalid or missing 2FA token", status_code=status.HTTP_400_BAD_REQUEST)
 
         # Login user and store session info
@@ -165,6 +203,8 @@ class LoginView(generics.GenericAPIView):
         user.refresh_token = refresh_token
         user.save(update_fields=["refresh_token"])
         
+        logger.info(f"User {user.email} logged in successfully from IP {get_client_ip(request)}")
+
         return api_response(
             True,
             "Login successful",
@@ -179,6 +219,7 @@ class LoginView(generics.GenericAPIView):
 # ----------------------
 # Logout
 # ----------------------
+@logout_schema
 class LogoutView(generics.GenericAPIView):
     """
     Logs out the authenticated user.
@@ -189,6 +230,7 @@ class LogoutView(generics.GenericAPIView):
 
     def post(self, request):
         request.user.refresh_token = None
+        logger.info(f"User {user.email} (ID: {user.id}) logged out.")
         request.user.save(update_fields=["refresh_token"])
         request.session.flush()
         return api_response(True, "Logged out successfully")
@@ -196,6 +238,7 @@ class LogoutView(generics.GenericAPIView):
 # ----------------------
 # Refresh Token
 # ----------------------
+@refresh_token_schema
 class RefreshTokenView(generics.GenericAPIView):
     """
     Refreshes the access token using a valid refresh token.
@@ -210,18 +253,22 @@ class RefreshTokenView(generics.GenericAPIView):
 
         user = User.objects.filter(refresh_token=refresh_token, is_active=True).first()
         if not user:
+            logger.warning("Invalid refresh token attempt detected.")
             return api_response(False, "Invalid or expired refresh token", status_code=status.HTTP_401_UNAUTHORIZED)
 
         try:
             token = RefreshToken(refresh_token)
             access_token = str(token.access_token)
+            logger.info(f"Access token refreshed successfully for user {user.email}")
             return api_response(True, "Token refreshed successfully", data={"access_token": access_token})
         except TokenError as e:
+            logger.error(f"Refresh token error for {user.email if user else 'unknown'}: {str(e)}")
             return api_response(False, f"Invalid or expired refresh token: {str(e)}", status_code=status.HTTP_401_UNAUTHORIZED)
 
 # ----------------------
 # Forgot Password
 # ----------------------
+@forgot_password_schema
 class ForgotPasswordView(generics.GenericAPIView):
     """
     Generates a password reset token and sends it to the user's email.
@@ -251,12 +298,15 @@ class ForgotPasswordView(generics.GenericAPIView):
                 template_name="reset_password",
                 context={"username": user.username, "reset_link": reset_link}
             )
-
+            logger.info(f"Password reset email sent to {user.email}")
+        else:
+            logger.warning(f"Password reset requested for non-existing email: {email}")
         return api_response(True, "Reset link sent successfully.")
 
 # ----------------------
 # Reset Password
 # ----------------------
+@reset_password_schema
 class ResetPasswordView(generics.GenericAPIView):
     """
     Resets the user's password using a valid token.
@@ -274,6 +324,7 @@ class ResetPasswordView(generics.GenericAPIView):
         # Validate token
         user = User.objects.filter(forgot_password_token=hashed_token, forgot_password_expiry__gt=timezone.now()).first()
         if not user:
+            logger.warning("Invalid or expired password reset token used.")
             return api_response(False, "Invalid or expired token", status_code=status.HTTP_400_BAD_REQUEST)
 
         # Set new password
@@ -282,11 +333,13 @@ class ResetPasswordView(generics.GenericAPIView):
         user.forgot_password_expiry = None
         user.save(update_fields=["password", "forgot_password_token", "forgot_password_expiry"])
 
+        logger.info(f"Password reset successfully for {user.email}")
         return api_response(True, "Password reset successful")
 
 # ----------------------
 # Change Password
 # ----------------------
+@change_password_schema
 class ChangePasswordView(generics.GenericAPIView):
     """
     Allows an authenticated user to change their password.
@@ -300,16 +353,20 @@ class ChangePasswordView(generics.GenericAPIView):
 
         # Check old password
         if not request.user.check_password(serializer.validated_data["old_password"]):
+            logger.warning(f"Incorrect old password attempt by {user.email}")
             return api_response(False, "Old password incorrect", status_code=status.HTTP_400_BAD_REQUEST)
 
         # Set new password
         request.user.set_password(serializer.validated_data["new_password"])
         request.user.save(update_fields=["password"])
+        
+        logger.info(f"Password changed successfully for {user.email}")
         return api_response(True, "Password changed successfully")
 
 # ----------------------
 # Resend Email Verification
 # ----------------------
+@resend_verification_email_schema
 class ResendEmailView(generics.GenericAPIView):
     """
     Resends email verification token to the user.
@@ -338,11 +395,13 @@ class ResendEmailView(generics.GenericAPIView):
             context={"username": user.username, "verification_code": un_hashed, "verify_link": verify_link},
         )
 
+        logger.info(f"Verification email resent to {user.email}")
         return api_response(True, "Verification email resent successfully.")
 
 # ----------------------
 # Current User
 # ----------------------
+@get_current_user_schema
 class CurrentUserView(generics.RetrieveAPIView):
     """
     Retrieves the currently authenticated user's details.
@@ -354,12 +413,14 @@ class CurrentUserView(generics.RetrieveAPIView):
         return self.request.user
 
     def get(self, request, *args, **kwargs):
+        logger.info(f"Current user retrieved: {user.email} (ID: {user.id})")
         serializer = self.get_serializer(self.get_object())
         return api_response(True, "Current user retrieved successfully", data=serializer.data)
 
 # ----------------------
 # Update Avatar
 # ----------------------
+@update_avatar_schema
 class UpdateAvatarView(generics.UpdateAPIView):
     """
     Updates the authenticated user's avatar.
@@ -367,7 +428,7 @@ class UpdateAvatarView(generics.UpdateAPIView):
     """
     serializer_class = UpdateAvatarSerializer
     permission_classes = [permissions.IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser] 
+    parser_classes = [MultiPartParser, FormParser]
     http_method_names = ['patch']
 
     def get_object(self):
@@ -375,23 +436,28 @@ class UpdateAvatarView(generics.UpdateAPIView):
 
     def patch(self, request, *args, **kwargs):
         file = request.FILES.get("avatar")
+        user = request.user
+
         if not file:
+            logger.warning(f"Avatar upload failed: No file provided by user {user.email} (ID: {user.id})")
             return api_response(False, "No file provided", status_code=status.HTTP_400_BAD_REQUEST)
 
         try:
             avatar_url = upload_to_cloudinary(file, folder="avatars")
+            user.avatar = avatar_url
+            user.save(update_fields=["avatar"])
+
+            logger.info(f"Avatar updated successfully for user {user.email} (ID: {user.id})")
+            return api_response(True, "Avatar updated successfully", data={"avatar": avatar_url})
+
         except Exception as e:
-            return api_response(False, str(e), status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        user = request.user
-        user.avatar = avatar_url 
-        user.save(update_fields=["avatar"])
-
-        return api_response(True, "Avatar updated successfully", data={"avatar": avatar_url})
+            logger.error(f"Error uploading avatar for user {user.email}: {str(e)}", exc_info=True)
+            return api_response(False, "Error uploading avatar", status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # ----------------------
 # OAuth Callbacks (Google)
 # ----------------------
+@google_login_schema
 class GoogleLoginView(generics.GenericAPIView):
     """
     Generates Google OAuth login URL for client.
@@ -406,8 +472,10 @@ class GoogleLoginView(generics.GenericAPIView):
             f"&redirect_uri={settings.GOOGLE_REDIRECT_URI}"
             f"&scope=openid%20email%20profile&access_type=offline&prompt=consent"
         )
+        logger.info("Google OAuth login URL generated successfully")
         return api_response(True, "Google login URL generated successfully", data={"auth_url": auth_url})
 
+@google_callback_schema
 class GoogleLoginCallbackView(generics.GenericAPIView):
     """
     Handles Google OAuth callback.
@@ -421,55 +489,73 @@ class GoogleLoginCallbackView(generics.GenericAPIView):
         serializer.is_valid(raise_exception=True)
         code = serializer.validated_data["code"]
 
-        # Exchange code for access token
-        token_res = requests.post(
-            "https://oauth2.googleapis.com/token",
-            data={
-                "code": code,
-                "client_id": settings.GOOGLE_CLIENT_ID,
-                "client_secret": settings.GOOGLE_CLIENT_SECRET,
-                "redirect_uri": settings.GOOGLE_REDIRECT_URI,
-                "grant_type": "authorization_code",
-            }
-        ).json()
+        logger.info("Received Google OAuth callback with code")
 
-        google_access_token = token_res.get("access_token")
-        if not google_access_token:
-            return api_response(False, "Failed to get access token from Google", status_code=status.HTTP_400_BAD_REQUEST)
+        try:
+            # Exchange code for access token
+            token_res = requests.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "code": code,
+                    "client_id": settings.GOOGLE_CLIENT_ID,
+                    "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                    "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+                    "grant_type": "authorization_code",
+                }
+            ).json()
 
-        # Get user info
-        user_info = requests.get(
-            "https://www.googleapis.com/oauth2/v3/userinfo",
-            headers={"Authorization": f"Bearer {google_access_token}"}
-        ).json()
+            google_access_token = token_res.get("access_token")
+            if not google_access_token:
+                logger.warning(f"Failed to get Google access token: {token_res}")
+                return api_response(False, "Failed to get access token from Google", status_code=status.HTTP_400_BAD_REQUEST)
 
-        email = user_info.get("email")
-        username = user_info.get("name")
-        if not email:
-            return api_response(False, "Email not available from Google", status_code=status.HTTP_400_BAD_REQUEST)
+            # Get user info
+            user_info = requests.get(
+                "https://www.googleapis.com/oauth2/v3/userinfo",
+                headers={"Authorization": f"Bearer {google_access_token}"}
+            ).json()
 
-        # Create or update user
-        user, created = User.objects.get_or_create(
-            email=email,
-            defaults={"username": username, "is_verified": True, "login_type": LOGIN_GOOGLE}
-        )
-        if not created:
-            user.username = username
-            user.is_verified = True
-            user.save(update_fields=["username", "is_verified"])
+            email = user_info.get("email")
+            username = user_info.get("name")
 
-        # Generate tokens
-        access_token, refresh_token = generate_jwt_tokens(user)
-        user.refresh_token = refresh_token
-        user.save(update_fields=["refresh_token"])
+            if not email:
+                logger.error("Google user info missing email")
+                return api_response(False, "Email not available from Google", status_code=status.HTTP_400_BAD_REQUEST)
 
-        # Redirect to frontend with tokens
-        params = urlencode({"access": access_token, "refresh": refresh_token})
-        return redirect(f"{settings.FRONTEND_URL}/api/v1/accounts/google/callback?{params}")
+            # Create or update user
+            user, created = User.objects.get_or_create(
+                email=email,
+                defaults={"username": username, "is_verified": True, "login_type": LOGIN_GOOGLE}
+            )
+            if created:
+                logger.info(f"New Google user created: {email}")
+            else:
+                user.username = username
+                user.is_verified = True
+                user.save(update_fields=["username", "is_verified"])
+                logger.info(f"Existing Google user logged in: {email}")
+
+            # Generate tokens
+            access_token, refresh_token = generate_jwt_tokens(user)
+            user.refresh_token = refresh_token
+            user.save(update_fields=["refresh_token"])
+
+            logger.info(f"JWT tokens generated for Google user: {email}")
+
+            params = urlencode({"access": access_token, "refresh": refresh_token})
+            redirect_url = f"{settings.FRONTEND_URL}/api/v1/accounts/google/callback?{params}"
+            logger.info(f"Redirecting Google user {email} to {redirect_url}")
+
+            return redirect(redirect_url)
+
+        except Exception as e:
+            logger.error(f"Error handling Google OAuth callback: {str(e)}", exc_info=True)
+            return api_response(False, "Internal server error during Google OAuth", status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # ----------------------
 # OAuth Callbacks (GitHub)
 # ----------------------
+@github_login_schema
 class GitHubLoginView(APIView):
     """
     Generates GitHub OAuth login URL for client.
@@ -479,8 +565,10 @@ class GitHubLoginView(APIView):
 
     def get(self, request):
         auth_url = f"https://github.com/login/oauth/authorize?client_id={settings.GITHUB_CLIENT_ID}&redirect_uri={settings.GITHUB_REDIRECT_URI}&scope=user:email"
+        logger.info("GitHub OAuth login URL generated successfully")
         return api_response(True, "GitHub login URL generated successfully", data={"auth_url": auth_url})
 
+@github_callback_schema
 class GitHubLoginCallbackView(generics.GenericAPIView):
     """
     Handles GitHub OAuth callback.
@@ -494,56 +582,74 @@ class GitHubLoginCallbackView(generics.GenericAPIView):
         serializer.is_valid(raise_exception=True)
         code = serializer.validated_data["code"]
 
-        # Exchange code for access token
-        token_res = requests.post(
-            "https://github.com/login/oauth/access_token",
-            data={
-                "client_id": settings.GITHUB_CLIENT_ID,
-                "client_secret": settings.GITHUB_CLIENT_SECRET,
-                "code": code
-            },
-            headers={"Accept": "application/json"}
-        ).json()
+        logger.info("Received GitHub OAuth callback with code")
 
-        access_token = token_res.get("access_token")
-        if not access_token:
-            return api_response(False, "Failed to get access token from GitHub", status_code=status.HTTP_400_BAD_REQUEST)
+        try:
+            # Exchange code for access token
+            token_res = requests.post(
+                "https://github.com/login/oauth/access_token",
+                data={
+                    "client_id": settings.GITHUB_CLIENT_ID,
+                    "client_secret": settings.GITHUB_CLIENT_SECRET,
+                    "code": code
+                },
+                headers={"Accept": "application/json"}
+            ).json()
 
-        # Get user info
-        user_info = requests.get(
-            "https://api.github.com/user",
-            headers={"Authorization": f"token {access_token}"}
-        ).json()
+            access_token = token_res.get("access_token")
+            if not access_token:
+                logger.warning(f"Failed to get GitHub access token: {token_res}")
+                return api_response(False, "Failed to get access token from GitHub", status_code=status.HTTP_400_BAD_REQUEST)
 
-        email = user_info.get("email") or f"{user_info.get('id')}@github.com"
-        username = user_info.get("login")
+            # Get user info
+            user_info = requests.get(
+                "https://api.github.com/user",
+                headers={"Authorization": f"token {access_token}"}
+            ).json()
 
-        # Create or update user
-        user, created = User.objects.get_or_create(
-            email=email,
-            defaults={"username": username, "is_verified": True, "login_type": LOGIN_GITHUB}
-        )
-        if not created:
-            user.username = username
-            user.is_verified = True
-            user.save(update_fields=["username", "is_verified"])
+            email = user_info.get("email") or f"{user_info.get('id')}@github.com"
+            username = user_info.get("login")
 
-        # Generate tokens
-        access_token, refresh_token = generate_jwt_tokens(user)
-        user.refresh_token = refresh_token
-        user.save(update_fields=["refresh_token"])
+            # Create or update user
+            user, created = User.objects.get_or_create(
+                email=email,
+                defaults={"username": username, "is_verified": True, "login_type": LOGIN_GITHUB}
+            )
+            if created:
+                logger.info(f"New GitHub user created: {email}")
+            else:
+                user.username = username
+                user.is_verified = True
+                user.save(update_fields=["username", "is_verified"])
+                logger.info(f"Existing GitHub user logged in: {email}")
 
-        # Redirect to frontend with tokens
-        params = urlencode({"access": access_token, "refresh": refresh_token, "username": username})
-        return redirect(f"{settings.FRONTEND_URL}/github/callback?{params}")
+            # Generate tokens
+            access_token, refresh_token = generate_jwt_tokens(user)
+            user.refresh_token = refresh_token
+            user.save(update_fields=["refresh_token"])
+
+            logger.info(f"JWT tokens generated for GitHub user: {email}")
+
+            # Redirect to frontend with tokens
+            params = urlencode({"access": access_token, "refresh": refresh_token, "username": username})
+            redirect_url = f"{settings.FRONTEND_URL}/github/callback?{params}"
+            logger.info(f"Redirecting GitHub user {email} to {redirect_url}")
+
+            return redirect(redirect_url)
+
+        except Exception as e:
+            logger.error(f"Error handling GitHub OAuth callback: {str(e)}", exc_info=True)
+            return api_response(False, "Internal server error during GitHub OAuth", status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # ----------------------
 # Role Management
 # ----------------------
+@change_role_schema
 class ChangeRoleView(generics.GenericAPIView):
     """
     Allows SuperAdmin to change the role of another user.
-    Cannot change own role or other SuperAdmin's role.
+    - Cannot change own role
+    - Cannot change another SuperAdmin’s role
     """
     serializer_class = ChangeRoleSerializer
     permission_classes = [permissions.IsAuthenticated, IsSuperAdmin]
@@ -553,47 +659,69 @@ class ChangeRoleView(generics.GenericAPIView):
         serializer.is_valid(raise_exception=True)
 
         user_id = serializer.validated_data["user_id"]
-        role = serializer.validated_data["role"]
-        
+        new_role = serializer.validated_data["role"]
+
+        # Prevent SuperAdmin from changing their own role
         if str(request.user.id) == str(user_id):
             return api_response(
-                False,
-                "SuperAdmin cannot change their own role.",
+                success=False,
+                message="SuperAdmin cannot change their own role.",
                 status_code=status.HTTP_400_BAD_REQUEST
             )
 
+        # Fetch user safely
         try:
             user = User.objects.get(id=user_id, is_active=True)
         except User.DoesNotExist:
-            return api_response(False, "User not found", status_code=status.HTTP_404_NOT_FOUND)
-        
+            return api_response(
+                success=False,
+                message="User not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        # Prevent modifying another SuperAdmin
         if user.role == "SUPERADMIN":
             return api_response(
-                False,
-                "You cannot change the role of another SuperAdmin.",
+                success=False,
+                message="You cannot change the role of another SuperAdmin.",
                 status_code=status.HTTP_400_BAD_REQUEST
             )
 
-        user.role = role
+        # Update role
+        user.role = new_role
         user.save(update_fields=["role"])
 
-        return api_response(True, f"Role updated successfully to {role}", data={"user_id": user.id, "role": user.role})
+        logger.info(f"Role of user {user.email} changed to {new_role} by {request.user.email}")
+
+        return api_response(
+            success=True,
+            message="Role updated successfully.",
+            data={
+                "user_id": str(user.id),
+                "role": user.role
+            },
+            status_code=status.HTTP_200_OK
+        )
 
 # ----------------------
 # 2FA Management
 # ----------------------
+@setup_2fa_schema
 class Setup2FAView(APIView):
     """
     Generates a TOTP secret and QR code for 2FA setup.
     """
-    serializer_class = EmptySerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         user = request.user
 
         if user.is_2fa_enabled:
-            return api_response(False, "2FA is already enabled.")
+            return api_response(
+                success=False,
+                message="2FA is already enabled.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
 
         if not user.totp_secret:
             user.generate_totp_secret()
@@ -601,12 +729,16 @@ class Setup2FAView(APIView):
         totp_uri = user.get_totp_uri()
         qr_code_base64 = generate_totp_qr_code(totp_uri)
 
+        logger.info(f"TOTP secret generated for user: {user.email}")
+
         return api_response(
-            True,
-            "TOTP secret generated successfully.",
-            data={"totp_uri": totp_uri, "qr_code": qr_code_base64}
+            success=True,
+            message="TOTP secret generated successfully.",
+            data={"totp_uri": totp_uri, "qr_code": qr_code_base64},
+            status_code=status.HTTP_200_OK
         )
 
+@enable_2fa_schema
 class Enable2FAView(generics.GenericAPIView):
     """
     Enables 2FA for the user after validating the TOTP token.
@@ -618,19 +750,42 @@ class Enable2FAView(generics.GenericAPIView):
         user = request.user
 
         if user.is_2fa_enabled:
-            return api_response(False, "2FA is already enabled.")
-        
-        serializer = Enable2FASerializer(data=request.data)
+            return api_response(
+                success=False,
+                message="2FA is already enabled.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         token = serializer.validated_data["token"]
-        
+
+        if not user.totp_secret:
+            return api_response(
+                success=False,
+                message="TOTP secret not generated yet. Please set up 2FA first.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
         if user.verify_totp(token):
             user.is_2fa_enabled = True
             user.save(update_fields=["is_2fa_enabled"])
-            return api_response(True, "2FA enabled successfully.")
-        
-        return api_response(False, "Invalid TOTP token.", status_code=status.HTTP_400_BAD_REQUEST)
 
+            logger.info(f"2FA enabled for user: {user.email}")
+
+            return api_response(
+                success=True,
+                message="2FA enabled successfully.",
+                status_code=status.HTTP_200_OK
+            )
+
+        return api_response(
+            success=False,
+            message="Invalid TOTP token.",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+@disable_2fa_schema
 class Disable2FAView(generics.GenericAPIView):
     """
     Disables 2FA for the user after validating the TOTP token.
@@ -644,10 +799,28 @@ class Disable2FAView(generics.GenericAPIView):
         serializer.is_valid(raise_exception=True)
         token = serializer.validated_data["token"]
 
+        if not user.is_2fa_enabled:
+            return api_response(
+                success=False,
+                message="2FA is not enabled for this account.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
         if user.verify_totp(token):
             user.is_2fa_enabled = False
             user.totp_secret = None
             user.save(update_fields=["is_2fa_enabled", "totp_secret"])
-            return api_response(True, "2FA disabled successfully.")
 
-        return api_response(False, "Invalid TOTP token.", status_code=status.HTTP_400_BAD_REQUEST)
+            logger.info(f"2FA disabled for user: {user.email}")
+
+            return api_response(
+                success=True,
+                message="2FA disabled successfully.",
+                status_code=status.HTTP_200_OK
+            )
+
+        return api_response(
+            success=False,
+            message="Invalid TOTP token.",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )

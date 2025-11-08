@@ -1,24 +1,21 @@
 from django.contrib import admin
 from django.urls import path, include
-from drf_spectacular.views import (
-    SpectacularAPIView,
-    SpectacularRedocView,
-    SpectacularSwaggerView,
-)
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 from django.conf import settings
 from django.conf.urls.static import static
 
 urlpatterns = [
     path("admin/", admin.site.urls),
 
-    # API Schema & Docs
+    # OpenAPI Schema
     path("api/v1/schema/", SpectacularAPIView.as_view(), name="schema"),
+
+    # Swagger UI
     path("api/v1/docs/swagger/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+
+    # ReDoc UI
     path("api/v1/docs/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
 
-    # Health Check
-    path("api/v1/health/", include(("health.urls", "health"), namespace="health")),
-    
     # Apps
     path("api/v1/accounts/", include(("accounts.urls", "accounts"), namespace="accounts")),
     path("api/v1/todo/", include(("todo.urls", "todo"), namespace="todo")),
@@ -27,6 +24,9 @@ urlpatterns = [
     path("api/v1/chats/", include(("chat.urls", "chat"), namespace="chat")),
     path("api/v1/public/", include(("public.urls", "public"), namespace="public")),
     path("api/v1/kitchen/", include(("kitchen.urls", "kitchen"), namespace="kitchen")),
+
+    # Health check
+    path("api/v1/health/", include(("health.urls", "health"), namespace="health")),
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
