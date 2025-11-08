@@ -14,6 +14,15 @@ from todo.serializers import (
     TodoRestoreResponseSerializer,
     ToggleStatusResponseSerializer,
 )
+from todo.swagger import (
+    todo_list_schema,
+    todo_create_schema,
+    todo_update_schema,
+    todo_delete_schema,
+    todo_restore_schema,
+    todo_retrieve_schema,
+    todo_toggle_status_schema
+)
 from core.utils import api_response
 from core.logger import get_logger
 from core.throttles import FreeUserThrottle
@@ -39,13 +48,11 @@ class TodoViewSet(viewsets.ModelViewSet):
     # Querysets
     # =============================================================
     def get_queryset(self):
-        if getattr(self, "swagger_fake_view", False):
-            return Todo.objects.none()
+        """Return all active todos for the authenticated user."""
         return Todo.objects.filter(owner=self.request.user, deleted_at__isnull=True)
 
     def get_deleted_queryset(self):
-        if getattr(self, "swagger_fake_view", False):
-            return Todo.all_objects.none()
+        """Return all soft-deleted todos for the authenticated user."""
         return Todo.all_objects.filter(owner=self.request.user, deleted_at__isnull=False)
 
     # =============================================================
@@ -61,11 +68,34 @@ class TodoViewSet(viewsets.ModelViewSet):
         }.get(self.action, TodoSerializer)
         
     # =============================================================
+    # LIST
+    # =============================================================
+    @todo_list_schema
+    def list(self, request, *args, **kwargs):
+        """List all todos for the authenticated user"""
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = self.get_serializer(queryset, many=True)
+        logger.info("Todos retrieved successfully")
+        return api_response(
+            True,
+            "Todos retrieved successfully",
+            serializer.data,
+            status.HTTP_200_OK
+        )
+        
+    # =============================================================
     # RETRIEVE
     # =============================================================
+    @todo_retrieve_schema
     def retrieve(self, request, *args, **kwargs):
         todo = self.get_object()
         serializer = self.get_serializer(todo)
+        logger.info("Todos retrieved successfully")
         return api_response(
             success=True,
             message="Todo retrieved successfully",
@@ -76,6 +106,7 @@ class TodoViewSet(viewsets.ModelViewSet):
     # =============================================================
     # CREATE
     # =============================================================
+    @todo_create_schema
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -93,6 +124,7 @@ class TodoViewSet(viewsets.ModelViewSet):
     # =============================================================
     # UPDATE
     # =============================================================
+    @todo_update_schema
     @transaction.atomic
     def update(self, request, *args, **kwargs):
         todo = self.get_object()
@@ -111,6 +143,7 @@ class TodoViewSet(viewsets.ModelViewSet):
     # =============================================================
     # PARTIAL UPDATE
     # =============================================================
+    @todo_update_schema
     @transaction.atomic
     def partial_update(self, request, *args, **kwargs):
         todo = self.get_object()
@@ -129,6 +162,7 @@ class TodoViewSet(viewsets.ModelViewSet):
     # =============================================================
     # SOFT DELETE
     # =============================================================
+    @todo_delete_schema
     @action(detail=True, methods=["delete"], url_path="delete")
     @transaction.atomic
     def soft_delete(self, request, pk=None):
@@ -149,6 +183,7 @@ class TodoViewSet(viewsets.ModelViewSet):
     # =============================================================
     # RESTORE
     # =============================================================
+    @todo_restore_schema
     @action(detail=True, methods=["post"], url_path="restore")
     @transaction.atomic
     def restore(self, request, pk=None):
@@ -169,6 +204,7 @@ class TodoViewSet(viewsets.ModelViewSet):
     # =============================================================
     # TOGGLE STATUS
     # =============================================================
+    @todo_toggle_status_schema
     @action(detail=True, methods=["patch"], url_path="toggle-status")
     @transaction.atomic
     def toggle_status(self, request, pk=None):

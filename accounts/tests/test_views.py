@@ -230,7 +230,6 @@ class TestForgotPasswordView:
     
     def test_forgot_password_nonexistent_email(self, api_client, mock_send_email):
         """Test forgot password with nonexistent email"""
-        
         url = reverse('accounts:forgot-password')
         response = api_client.post(url, {"email": "nonexistent@example.com"})
 
@@ -595,11 +594,11 @@ class Test2FAViews:
         """Test enablement when 2FA is already enabled"""
         url = reverse("accounts:2fa-enable")
         data = {"token": "123456"}
-        
+
         response = authenticated_client_with_2fa.post(url, data)
         user_with_2fa.refresh_from_db()
-        
-        assert response.status_code == status.HTTP_200_OK
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "already enabled" in response.data['message']
         assert user_with_2fa.is_2fa_enabled is True
         

@@ -229,9 +229,10 @@ class LogoutView(generics.GenericAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        request.user.refresh_token = None
+        user = request.user 
+        user.refresh_token = None
+        user.save(update_fields=["refresh_token"])
         logger.info(f"User {user.email} (ID: {user.id}) logged out.")
-        request.user.save(update_fields=["refresh_token"])
         request.session.flush()
         return api_response(True, "Logged out successfully")
 
@@ -279,6 +280,7 @@ class ForgotPasswordView(generics.GenericAPIView):
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data["email"]
         user = User.objects.filter(email=serializer.validated_data["email"]).first()
 
         if user:
@@ -350,15 +352,17 @@ class ChangePasswordView(generics.GenericAPIView):
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        
+        user = request.user
 
         # Check old password
-        if not request.user.check_password(serializer.validated_data["old_password"]):
+        if not user.check_password(serializer.validated_data["old_password"]):
             logger.warning(f"Incorrect old password attempt by {user.email}")
             return api_response(False, "Old password incorrect", status_code=status.HTTP_400_BAD_REQUEST)
 
         # Set new password
-        request.user.set_password(serializer.validated_data["new_password"])
-        request.user.save(update_fields=["password"])
+        user.set_password(serializer.validated_data["new_password"])
+        user.save(update_fields=["password"])
         
         logger.info(f"Password changed successfully for {user.email}")
         return api_response(True, "Password changed successfully")
@@ -413,8 +417,9 @@ class CurrentUserView(generics.RetrieveAPIView):
         return self.request.user
 
     def get(self, request, *args, **kwargs):
+        user = self.get_object() 
         logger.info(f"Current user retrieved: {user.email} (ID: {user.id})")
-        serializer = self.get_serializer(self.get_object())
+        serializer = self.get_serializer(user)
         return api_response(True, "Current user retrieved successfully", data=serializer.data)
 
 # ----------------------
